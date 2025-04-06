@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import axios from 'axios';
 import { StarIcon } from '@heroicons/react/24/solid';
+import Navbar from '../components/Navbar';
 
 const MovieResults = () => {
   const [movie, setMovie] = useState(null);
@@ -9,7 +10,6 @@ const MovieResults = () => {
   const [error, setError] = useState(null);
   const [trailerUrl, setTrailerUrl] = useState(null); // For trailer URL
   const location = useLocation();
-  const navigate = useNavigate();
 
   // Extract the movie ID from the query parameters
   const queryParams = new URLSearchParams(location.search);
@@ -67,14 +67,7 @@ const MovieResults = () => {
 
   return (
     <div className="min-h-screen bg-dark text-white">
-      {/* Navigation */}
-      <nav className="py-4 border-b border-violet-900/30 bg-darker sticky top-0 z-50">
-        <div className="container mx-auto px-4 flex justify-between items-center">
-          <button onClick={() => navigate('/')} className="flex items-center gap-2 text-2xl font-bold">
-            <span className="text-violet-400">CinePredict</span>
-          </button>
-        </div>
-      </nav>
+      <Navbar />
 
       {/* Movie Details Section */}
       <section className="container mx-auto px-4 py-12">
