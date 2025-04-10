@@ -7,8 +7,8 @@ import {
   CommandLineIcon
 } from '@heroicons/react/24/outline';
 import axios from 'axios';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import Navbar from '../components/Navbar';
+import { createWorker } from 'tesseract.js';
 
 const Homepage = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -17,8 +17,6 @@ const Homepage = () => {
   const [suggestions, setSuggestions] = useState([]);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const navigate = useNavigate();
-
-  const genAI = new GoogleGenerativeAI(process.env.REACT_APP_GEMINI_API_KEY);
 
   const fetchSuggestions = async (query) => {
     if (query.trim() === '' || query.length < 3) {
@@ -41,72 +39,28 @@ const Homepage = () => {
   };
 
   const handleSearch = async () => {
-    if (searchMode === 'advanced' && searchQuery.trim()) {
+    if (searchMode === 'image' && imagePreview) {
       try {
-        const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
-        const prompt = `Identify the movie based on this description: "${searchQuery}". 
-          Follow this format exactly:
-          1. [Exact Movie Title] ([Release Year]) - [Confidence%] - [Brief Reason]
-          2. ... (up to 5 movies)
-          Include only movies from 1970-2023 with theatrical releases.`;
+        const worker = await createWorker();
         
-        const result = await model.generateContent(prompt);
-        const text = (await result.response).text();
-        const movies = await enhanceWithTMDBData(text);
+        await worker.load('eng');
+        await worker.initialize('eng');
+
+        const { data: { text } } = await worker.recognize(imagePreview);
+        await worker.terminate();
         
-        if (movies.length > 0) {
-          navigate('/advanced-results', { state: { predictions: movies } });
-        } else {
-          alert('No movies found matching your description');
+        const cleanedText = text.replace(/\n/g, ' ').trim();
+        if (!cleanedText) {
+          throw new Error('No text found in image');
         }
+        
+        navigate(`/ocr-results?text=${encodeURIComponent(cleanedText)}`);
       } catch (error) {
-        console.error('Gemini Error:', error);
-        // Fallback to TMDB keyword search
-        const fallbackResults = await axios.get(
-          `https://api.themoviedb.org/3/search/movie?api_key=${process.env.REACT_APP_TMDB_API_KEY}`,
-          {
-            params: {
-              query: searchQuery,
-              include_adult: false,
-              page: 1
-            }
-          }
-        );
-
-        const validResults = fallbackResults.data.results
-          .filter(m => m.title && m.id)
-          .slice(0, 5)
-          .map(m => ({
-            title: m.title,
-            confidence: Math.min(Math.floor(m.popularity), 100),
-            id: m.id,
-            overview: m.overview
-          }));
-
-        if (validResults.length > 0) {
-          navigate('/advanced-results', { state: { predictions: validResults } });
-        } else {
-          navigate('/advanced-results', { state: { predictions: [] } });
-        }
+        console.error('OCR Error:', error);
+        alert(error.message || 'Error processing image. Please try again.');
+        setImagePreview(null);
+        setSearchQuery('');
       }
-    } else if (searchMode === 'simple' && searchQuery.trim()) {
-      try {
-        const response = await axios.get(
-          `https://api.themoviedb.org/3/search/movie?api_key=${process.env.REACT_APP_TMDB_API_KEY}&query=${searchQuery}`
-        );
-        const movies = response.data.results;
-        if (movies.length > 0) {
-          // Navigate to the first movie's details
-          navigate(`/movie-results?id=${movies[0].id}`);
-        } else {
-          alert('No movies found for your search.');
-        }
-      } catch (error) {
-        console.error('Error fetching movie details:', error);
-        alert('Failed to fetch movie details.');
-      }
-    } else if (searchMode === 'image' && imagePreview) {
-      navigate(`/results?image=${encodeURIComponent(imagePreview)}`);
     }
   };
 
@@ -158,42 +112,6 @@ const Homepage = () => {
 
   const handleSuggestionClick = (movieId) => {
     navigate(`/movie-results?id=${movieId}`);
-  };
-
-  const enhanceWithTMDBData = async (geminiText) => {
-    const lines = geminiText.split('\n').filter(line => line.trim().match(/^\d+\./));
-    const movies = [];
-    
-    for (const line of lines) {
-      const match = line.match(/(.+?)\s\((\d{4})\)\s+-\s+(\d+)%?\s+-\s+(.+)/);
-      if (match) {
-        try {
-          const response = await axios.get(
-            `https://api.themoviedb.org/3/search/movie?api_key=${process.env.REACT_APP_TMDB_API_KEY}`,
-            {
-              params: {
-                query: match[1],
-                year: match[2],
-                include_adult: false
-              }
-            }
-          );
-          
-          if (response.data.results.length > 0) {
-            const bestMatch = response.data.results[0];
-            movies.push({
-              ...bestMatch,
-              confidence: match[3],
-              explanation: match[4],
-              id: bestMatch.id
-            });
-          }
-        } catch (error) {
-          console.error('TMDB Search Error:', error);
-        }
-      }
-    }
-    return movies;
   };
 
   return (

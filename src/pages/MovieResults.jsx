@@ -9,6 +9,8 @@ const MovieResults = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [trailerUrl, setTrailerUrl] = useState(null); // For trailer URL
+  const [streamingServices, setStreamingServices] = useState([]);
+  const [cast, setCast] = useState([]);
   const location = useLocation();
 
   // Extract the movie ID from the query parameters
@@ -25,13 +27,16 @@ const MovieResults = () => {
       }
 
       try {
-        // Fetch movie details
+        // Fetch movie details from TMDB
         const movieResponse = await axios.get(
           `https://api.themoviedb.org/3/movie/${movieId}?api_key=${process.env.REACT_APP_TMDB_API_KEY}`
         );
+        if (!movieResponse.data) {
+          throw new Error('No movie data found in the response.');
+        }
         setMovie(movieResponse.data);
 
-        // Fetch movie trailers
+        // Fetch movie trailers from TMDB
         const trailerResponse = await axios.get(
           `https://api.themoviedb.org/3/movie/${movieId}/videos?api_key=${process.env.REACT_APP_TMDB_API_KEY}`
         );
@@ -40,11 +45,35 @@ const MovieResults = () => {
         );
         if (trailer) {
           setTrailerUrl(`https://www.youtube.com/watch?v=${trailer.key}`);
+        } else {
+          console.warn('No trailers found for this movie.');
         }
+
+        // Fetch streaming services
+        const streamingResponse = await axios.get(
+          `https://api.themoviedb.org/3/movie/${movieId}/watch/providers?api_key=${process.env.REACT_APP_TMDB_API_KEY}`
+        );
+        if (streamingResponse.data.results.US) {
+          setStreamingServices(streamingResponse.data.results.US.flatrate || []);
+        }
+
+        // Fetch cast
+        const castResponse = await axios.get(
+          `https://api.themoviedb.org/3/movie/${movieId}/credits?api_key=${process.env.REACT_APP_TMDB_API_KEY}`
+        );
+        setCast(castResponse.data.cast.slice(0, 5));
 
         setLoading(false);
       } catch (error) {
         console.error('Error fetching movie details:', error);
+        if (error.response) {
+          console.error('Response data:', error.response.data);
+          console.error('Response status:', error.response.status);
+        } else if (error.request) {
+          console.error('No response received:', error.request);
+        } else {
+          console.error('Error:', error.message);
+        }
         setError('Failed to fetch movie details.');
         setLoading(false);
       }
@@ -73,25 +102,27 @@ const MovieResults = () => {
       <section className="container mx-auto px-4 py-12">
         <div className="flex flex-col md:flex-row gap-8">
           {/* Movie Poster */}
-          <div className="w-full md:w-1/3">
+          <div className="w-full md:w-1/3 relative">
             <img
               src={`https://image.tmdb.org/t/p/w500${movie.poster_path}`}
               alt={movie.title}
-              className="rounded-lg shadow-lg"
+              className="rounded-lg shadow-2xl transform hover:scale-105 transition-transform duration-300"
             />
+            {/* User Score */}
+            <div className="absolute -top-3 -right-3 bg-gradient-to-r from-pink-600 to-violet-600 rounded-full p-2 shadow-lg hover:scale-105 transition-transform">
+              <div className="flex items-center gap-1">
+                <StarIcon className="h-5 w-5 text-yellow-400" />
+                <span className="text-white font-bold text-sm">
+                  {Math.round(movie.vote_average * 10)}%
+                </span>
+              </div>
+            </div>
           </div>
 
           {/* Movie Information */}
           <div className="w-full md:w-2/3">
-            <h1 className="text-4xl font-bold mb-4">{movie.title}</h1>
+            <h1 className="text-4xl font-bold mb-6">{movie.title}</h1>
             <p className="text-lg text-gray-300 mb-6">{movie.overview}</p>
-
-            {/* Ratings */}
-            <div className="flex items-center gap-2 mb-6">
-              <StarIcon className="h-6 w-6 text-yellow-400" />
-              <p className="text-white">{movie.vote_average}/10</p>
-              <p className="text-gray-400">({movie.vote_count} votes)</p>
-            </div>
 
             {/* Additional Details */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
@@ -122,17 +153,48 @@ const MovieResults = () => {
                   href={trailerUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-block px-6 py-3 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors"
+                  className="inline-block px-6 py-3 bg-gradient-to-r from-pink-600 to-violet-600 text-white rounded-lg hover:from-pink-700 hover:to-violet-700 transition-colors transform hover:scale-105"
                 >
                   Watch Trailer
                 </a>
               </div>
             )}
 
-            {/* Reviews */}
-            <div>
-              <h2 className="text-2xl font-bold mb-4">Reviews</h2>
-              <p className="text-gray-300">Reviews from critics and audiences will be displayed here.</p>
+            {/* Add Streaming Services Section */}
+            {streamingServices.length > 0 && (
+              <div className="mb-8">
+                <h2 className="text-2xl font-bold mb-4">Available On</h2>
+                <div className="flex gap-4">
+                  {streamingServices.map((service) => (
+                    <div key={service.provider_id} className="flex items-center gap-2">
+                      <img
+                        src={`https://image.tmdb.org/t/p/w200${service.logo_path}`}
+                        alt={service.provider_name}
+                        className="w-8 h-8 rounded-md"
+                      />
+                      <span className="text-white">{service.provider_name}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Cast Section */}
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold mb-4">Cast</h2>
+              <div className="flex gap-4">
+                {cast.map((actor) => (
+                  <div key={actor.id} className="text-center">
+                    <img
+                      src={`https://image.tmdb.org/t/p/w200${actor.profile_path}`}
+                      alt={actor.name}
+                      className="w-24 h-24 rounded-full object-cover mb-2 shadow-lg hover:shadow-pink-500/50 transition-shadow"
+                    />
+                    <p className="text-white">{actor.name}</p>
+                    <p className="text-gray-400">{actor.character}</p>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>

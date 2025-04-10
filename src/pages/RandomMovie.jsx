@@ -12,15 +12,31 @@ const RandomMovie = () => {
 
   const fetchRandomMovie = async () => {
     try {
+      // Fetch a random page (1 to 500) to increase randomness
+      const randomPage = Math.floor(Math.random() * 500) + 1;
       const response = await axios.get(
-        `https://api.themoviedb.org/3/movie/popular?api_key=${process.env.REACT_APP_TMDB_API_KEY}`
+        `https://api.themoviedb.org/3/discover/movie?api_key=${process.env.REACT_APP_TMDB_API_KEY}&sort_by=popularity.desc&include_adult=false&include_video=false&page=${randomPage}&primary_release_date.gte=1970-01-01&primary_release_date.lte=2025-12-31`
       );
-      const movies = response.data.results;
+      if (!response.data.results || response.data.results.length === 0) {
+        throw new Error('No movies found in the response.');
+      }
+      const movies = response.data.results.filter(movie => !movie.adult); // Exclude adult content
+      if (movies.length === 0) {
+        throw new Error('No non-adult movies found.');
+      }
       const randomIndex = Math.floor(Math.random() * movies.length);
       setMovie(movies[randomIndex]);
       setLoading(false);
     } catch (error) {
       console.error('Error fetching random movie:', error);
+      if (error.response) {
+        console.error('Response data:', error.response.data);
+        console.error('Response status:', error.response.status);
+      } else if (error.request) {
+        console.error('No response received:', error.request);
+      } else {
+        console.error('Error:', error.message);
+      }
       setError('Failed to fetch movie. Please try again.');
       setLoading(false);
     }
