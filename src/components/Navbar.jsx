@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { SparklesIcon, CommandLineIcon, FaceSmileIcon } from '@heroicons/react/24/outline';
+import { SparklesIcon, FilmIcon, FaceSmileIcon } from '@heroicons/react/24/outline';
 
 const Navbar = () => {
   return (
@@ -10,20 +10,13 @@ const Navbar = () => {
           <span>CinePredict</span>
         </Link>
         <div className="flex items-center gap-6">
-          <Link 
-            to="/ai-recommendations" 
-            className="nav-link flex items-center gap-1 hover:text-violet-300 transition-colors"
-          >
-            <SparklesIcon className="h-6 w-5" />
-            <span>AI Recommendations</span>
-          </Link>
-          <Link to="/random-movie" className="nav-link flex items-center gap-1 hover:text-violet-300 transition-colors">
-            <CommandLineIcon className="h-6 w-5" />
-            <span>Random</span>
-          </Link>
           <Link to="/mood-picker" className="nav-link flex items-center gap-1 hover:text-violet-300 transition-colors">
             <FaceSmileIcon className="h-6 w-5" />
-            <span>Pick by Mood</span>
+            <span>Explore by Emotion</span>
+          </Link>
+          <Link to="/random-movie" className="nav-link flex items-center gap-1 hover:text-violet-300 transition-colors">
+            <FilmIcon className="h-6 w-5" />
+            <span>Random</span>
           </Link>
         </div>
       </div>

@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  SparklesIcon,
   MagnifyingGlassIcon,
   PhotoIcon,
-  CommandLineIcon
+  CommandLineIcon,
+  Cog6ToothIcon
 } from '@heroicons/react/24/outline';
 import axios from 'axios';
 import { reverseImageSearch } from '../utils/reverseImageSearch';
@@ -265,9 +265,9 @@ const Homepage = () => {
                     placeholder={
                       searchMode === 'simple' 
                         ? 'Search movies...' 
-                        : searchMode === 'advanced' 
-                        ? 'Describe a movie scene, plot, or elements...'
-                        : 'Paste image URL...'
+                        : searchMode === 'image' 
+                        ? 'Paste image URL...'
+                        : 'Describe a movie scene, plot, or elements...'
                     }
                     className="w-full p-5 pr-20 rounded-xl bg-gray-900 border-2 border-violet-900/50 focus:border-violet-500 outline-none text-white placeholder-violet-400/70 transition-all shadow-lg shadow-violet-900/20"
                   />
@@ -331,7 +331,7 @@ const Homepage = () => {
                     : 'text-gray-300 hover:bg-gray-700/20'
                 }`}
               >
-                <SparklesIcon className="h-5 w-5" />
+                <Cog6ToothIcon className="h-5 w-5" />
                 <span className="text-sm font-medium">Advanced</span>
               </button>
               
@@ -349,11 +349,11 @@ const Homepage = () => {
               </button>
             </div>
 
-            {/* Content Sections */}
+            {/* Add back the Advanced Filters section */}
             {searchMode === 'advanced' && (
               <div className="mt-6 text-left p-4 bg-gray-800/50 rounded-xl border border-violet-900/30 animate-fade-in">
                 <h3 className="text-violet-300 mb-3 flex items-center gap-2">
-                  <SparklesIcon className="h-5 w-5" />
+                  <Cog6ToothIcon className="h-5 w-5" />
                   Advanced Filters (Optional)
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -371,6 +371,7 @@ const Homepage = () => {
               </div>
             )}
 
+            {/* Content Sections */}
             {searchMode === 'image' && (
               <div className="mt-6 p-8 border-2 border-dashed border-violet-900/50 rounded-xl hover:border-violet-500 transition-all cursor-pointer group/image-upload animate-fade-in overflow-hidden"
                    onDragOver={(e) => {
