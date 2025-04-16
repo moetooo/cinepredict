@@ -1,8 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { SparklesIcon, ArrowPathIcon } from '@heroicons/react/24/solid';
-import Navbar from '../components/Navbar';
 
 const RandomMovie = () => {
   const [movie, setMovie] = useState(null);
@@ -10,54 +9,67 @@ const RandomMovie = () => {
   const [error, setError] = useState(null);
   const navigate = useNavigate();
 
-  const fetchRandomMovie = async () => {
+  const fetchRandomMovie = useCallback(async (retryCount = 0) => {
     try {
-      // Fetch a random page (1 to 500) to increase randomness
       const randomPage = Math.floor(Math.random() * 500) + 1;
       const response = await axios.get(
-        `https://api.themoviedb.org/3/discover/movie?api_key=${process.env.REACT_APP_TMDB_API_KEY}&sort_by=popularity.desc&include_adult=false&include_video=false&page=${randomPage}&primary_release_date.gte=1970-01-01&primary_release_date.lte=2025-12-31`
+        `https://api.themoviedb.org/3/discover/movie`,
+        {
+          params: {
+            api_key: process.env.REACT_APP_TMDB_API_KEY,
+            sort_by: 'popularity.desc',
+            include_adult: false,
+            'vote_count.gte': 100,  // Ensure minimum votes
+            page: randomPage,
+            language: 'en-US'
+          }
+        }
       );
-      if (!response.data.results || response.data.results.length === 0) {
+
+      if (!response.data.results?.length) {
         throw new Error('No movies found in the response.');
       }
-      const movies = response.data.results.filter(movie => !movie.adult); // Exclude adult content
+
+      const movies = response.data.results.filter(movie => 
+        !movie.adult && 
+        movie.poster_path &&
+        movie.popularity > 1
+      );
+
       if (movies.length === 0) {
-        throw new Error('No non-adult movies found.');
+        if (retryCount < 3) {
+          return fetchRandomMovie(retryCount + 1);
+        }
+        throw new Error('No suitable movies found after multiple attempts');
       }
+
       const randomIndex = Math.floor(Math.random() * movies.length);
       setMovie(movies[randomIndex]);
       setLoading(false);
     } catch (error) {
       console.error('Error fetching random movie:', error);
-      if (error.response) {
-        console.error('Response data:', error.response.data);
-        console.error('Response status:', error.response.status);
-      } else if (error.request) {
-        console.error('No response received:', error.request);
-      } else {
-        console.error('Error:', error.message);
-      }
-      setError('Failed to fetch movie. Please try again.');
+      setError(error.message.includes('No suitable movies') 
+        ? 'No movies found. Please try again later.'
+        : 'Failed to fetch movie. Please check your connection and try again.'
+      );
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchRandomMovie();
-  }, []);
+  }, [fetchRandomMovie]);
 
   return (
     <div className="min-h-screen bg-dark text-white">
-      <Navbar />
-      
-      <section className="container mx-auto px-4 py-8">
+      <section className="container mx-auto px-4 py-6">
         <div className="max-w-3xl mx-auto">
-          <div className="text-center mb-8">
-            <h1 className="text-3xl md:text-4xl font-bold mb-2 bg-gradient-to-r from-violet-400 to-pink-500 bg-clip-text text-transparent">
+          <div className="text-center mb-4">
+            <h1 className="text-3xl md:text-4xl font-bold mb-1 bg-gradient-to-r from-violet-400 to-pink-500 bg-clip-text text-transparent">
               Surprise Cinema
             </h1>
-            <p className="text-gray-400 text-sm">
-              Discover random movie gems from our curated collection
+            <p className="text-gray-400 text-xs">
+              Discover random movies from our selection
             </p>
           </div>
 
@@ -70,7 +82,13 @@ const RandomMovie = () => {
             </div>
           ) : error ? (
             <div className="text-center p-6 bg-red-900/20 rounded-xl border border-red-900/30">
-              <p className="text-red-400 text-lg">{error}</p>
+              <p className="text-red-400 text-lg mb-3">{error}</p>
+              <button
+                onClick={fetchRandomMovie}
+                className="px-4 py-2 bg-violet-600 hover:bg-violet-700 rounded-lg text-sm"
+              >
+                Try Again
+              </button>
             </div>
           ) : movie ? (
             <div className="group relative bg-gray-800/50 rounded-xl p-6 border border-violet-900/30 backdrop-blur-sm transition-all hover:border-violet-500">
@@ -115,7 +133,7 @@ const RandomMovie = () => {
                     </div>
                   )}
 
-                  <div className="flex gap-3 mt-6">
+                  <div className="flex gap-3 mt-4">
                     <button
                       onClick={() => navigate(`/movie-results?id=${movie.id}`)}
                       className="px-5 py-2 bg-violet-600 hover:bg-violet-700 rounded-lg transition-all flex items-center gap-1.5 shadow-md shadow-violet-900/30 hover:shadow-violet-900/40 text-sm"

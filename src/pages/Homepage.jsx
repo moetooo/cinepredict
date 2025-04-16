@@ -7,8 +7,7 @@ import {
   CommandLineIcon
 } from '@heroicons/react/24/outline';
 import axios from 'axios';
-import Navbar from '../components/Navbar';
-import { createWorker } from 'tesseract.js';
+import { reverseImageSearch } from '../utils/reverseImageSearch';
 
 const Homepage = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -16,6 +15,7 @@ const Homepage = () => {
   const [imagePreview, setImagePreview] = useState(null);
   const [suggestions, setSuggestions] = useState([]);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const navigate = useNavigate();
 
   const fetchSuggestions = async (query) => {
@@ -29,7 +29,7 @@ const Homepage = () => {
         `https://api.themoviedb.org/3/search/movie?api_key=${process.env.REACT_APP_TMDB_API_KEY}&query=${query}`
       );
       const filteredSuggestions = response.data.results
-        .filter(movie => movie.popularity > 5 && movie.poster_path)
+        .filter(movie => movie.popularity > 5 && movie.poster_path && !movie.adult)
         .slice(0, 5);
       setSuggestions(filteredSuggestions);
     } catch (error) {
@@ -41,25 +41,72 @@ const Homepage = () => {
   const handleSearch = async () => {
     if (searchMode === 'image' && imagePreview) {
       try {
-        const worker = await createWorker();
-        
-        await worker.load('eng');
-        await worker.initialize('eng');
+        console.log('Starting analysis with image dimensions:', {
+          width: imagePreview.width,
+          height: imagePreview.height
+        });
+        setIsAnalyzing(true);
+        // Convert image preview to blob
+        const blob = await fetch(imagePreview).then(r => r.blob());
+        // Create File object for upload
+        const file = new File([blob], 'movie-image', { type: blob.type });
 
-        const { data: { text } } = await worker.recognize(imagePreview);
-        await worker.terminate();
-        
-        const cleanedText = text.replace(/\n/g, ' ').trim();
-        if (!cleanedText) {
-          throw new Error('No text found in image');
+        if (file.size > 4 * 1024 * 1024) {
+          alert('Please upload images smaller than 4MB');
+          return;
         }
+
+        // Send to Vision
+        const movieName = await reverseImageSearch(file);
+        console.log('Received movie name from Vision:', movieName);
         
-        navigate(`/ocr-results?text=${encodeURIComponent(cleanedText)}`);
+        if (!movieName) {
+          console.log('Analysis failed for image:', {
+            size: file.size,
+            type: file.type,
+            preview: imagePreview.slice(0, 100) // First 100 chars of base64
+          });
+          alert('🚫 No movie detected. Please try: \n- Clear movie posters\n- Avoid text-heavy images\n- Use high-quality stills');
+          return;
+        }
+
+        // Search TMDB with explicit error handling
+        const tmdbResponse = await axios.get(
+          `https://api.themoviedb.org/3/search/movie`,
+          {
+            params: {
+              api_key: process.env.REACT_APP_TMDB_API_KEY,
+              query: movieName,
+              include_adult: false
+            }
+          }
+        );
+        console.log('TMDB search results:', tmdbResponse.data.results);
+
+        const validResults = tmdbResponse.data.results.filter(movie => 
+          movie.poster_path && movie.popularity > 1 && !movie.adult
+        );
+
+        if (validResults.length === 0) {
+          alert(`🔍 No matches found for "${movieName}". Try another image`);
+          return;
+        }
+
+        console.log('Cleaned movie name:', movieName);
+        console.log('First 3 TMDB results:', tmdbResponse.data.results.slice(0, 3));
+
+        navigate('/image-predictions', { 
+          state: { 
+            predictions: validResults.slice(0, 5),
+            searchTerm: movieName 
+          }
+        });
+        
       } catch (error) {
-        console.error('OCR Error:', error);
-        alert(error.message || 'Error processing image. Please try again.');
-        setImagePreview(null);
-        setSearchQuery('');
+        console.error('Prediction Error:', error);
+        alert(`❌ Error: ${error.response?.data?.status_message || error.message}`);
+      } finally {
+        setIsAnalyzing(false);
       }
     }
   };
@@ -86,7 +133,7 @@ const Homepage = () => {
         const selectedMovie = suggestions[highlightedIndex];
         setSearchQuery(selectedMovie.title);
         setSuggestions([]);
-        navigate(`/movie-results?id=${selectedMovie.id}`);
+        handleSuggestionClick(selectedMovie.id);
       }
     }
   };
@@ -102,6 +149,10 @@ const Homepage = () => {
   }, [searchQuery, searchMode]);
 
   const handleImageUpload = (file) => {
+    if (file.size > 4 * 1024 * 1024) {
+      alert('Please upload images smaller than 4MB');
+      return;
+    }
     const reader = new FileReader();
     reader.onload = (event) => {
       setImagePreview(event.target.result);
@@ -110,15 +161,39 @@ const Homepage = () => {
     reader.readAsDataURL(file);
   };
 
-  const handleSuggestionClick = (movieId) => {
-    navigate(`/movie-results?id=${movieId}`);
+  const handleSuggestionClick = async (movieId) => {
+    try {
+      const response = await axios.get(
+        `https://api.themoviedb.org/3/movie/${movieId}/similar`,
+        {
+          params: {
+            api_key: process.env.REACT_APP_TMDB_API_KEY,
+            language: 'en-US',
+            page: 1
+          }
+        }
+      );
+
+      const similarMovies = response.data.results
+        .filter(movie => movie.poster_path && !movie.adult)
+        .slice(0, 12);
+
+      navigate('/similar-movies', {
+        state: {
+          movies: similarMovies,
+          originalQuery: searchQuery
+        }
+      });
+      
+    } catch (error) {
+      console.error('Error fetching similar movies:', error);
+      alert('Failed to find similar movies. Please try again.');
+    }
   };
 
   return (
     <div>
       <div className="min-h-screen bg-dark text-white overflow-hidden">
-        <Navbar />
-
         {/* Search Section */}
         <section className="container mx-auto px-4 py-24 text-center h-[calc(100vh-80px)] overflow-y-hidden">
           <h1 className="text-4xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-violet-400 to-pink-500 bg-clip-text text-transparent">
@@ -244,7 +319,7 @@ const Homepage = () => {
                 }`}
               >
                 <CommandLineIcon className="h-5 w-5" />
-                <span className="text-sm font-medium">Simple</span>
+                <span className="text-sm font-medium">Similar Movies</span>
               </button>
               
               <button
@@ -321,8 +396,9 @@ const Homepage = () => {
                 <div className="flex flex-col items-center gap-3 text-violet-300 group-hover/image-upload:text-violet-400 transition-colors">
                   <PhotoIcon className="h-12 w-12" />
                   <p className="text-center">
-                    Drag & drop image here <br />
-                    or <span className="text-violet-400">click to upload</span>
+                    Upload clear movie posters/screenshots<br />
+                    Supported formats: JPG, PNG, WEBP<br />
+                    Max size: 4MB
                   </p>
                 </div>
                 <input
@@ -339,6 +415,17 @@ const Homepage = () => {
                     }
                   }}
                 />
+              </div>
+            )}
+
+            {/* Add loading indicator */}
+            {isAnalyzing && (
+              <div className="mt-6 text-violet-400 flex items-center justify-center gap-2">
+                <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Analyzing image...
               </div>
             )}
           </form>

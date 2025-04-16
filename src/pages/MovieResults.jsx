@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import axios from 'axios';
 import { StarIcon } from '@heroicons/react/24/solid';
-import Navbar from '../components/Navbar';
 
 const MovieResults = () => {
   const [movie, setMovie] = useState(null);
@@ -33,6 +32,9 @@ const MovieResults = () => {
         );
         if (!movieResponse.data) {
           throw new Error('No movie data found in the response.');
+        }
+        if (movieResponse.data.adult) {
+          throw new Error('Adult content filtered out');
         }
         setMovie(movieResponse.data);
 
@@ -96,8 +98,6 @@ const MovieResults = () => {
 
   return (
     <div className="min-h-screen bg-dark text-white">
-      <Navbar />
-
       {/* Movie Details Section */}
       <section className="container mx-auto px-4 py-12">
         <div className="flex flex-col md:flex-row gap-8">
