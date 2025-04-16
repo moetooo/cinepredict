@@ -1,6 +1,6 @@
 {
-  "short_name": "React App",
-  "name": "Create React App Sample",
+  "name": "CinePredict",
+  "short_name": "CinePredict",
   "icons": [
     {
       "src": "favicon.ico",
